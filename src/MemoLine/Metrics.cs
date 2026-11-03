@@ -18,6 +18,9 @@ internal static class Metrics
 
     public const double BaseWindowHeight = LineY + CardHeight + 30;
 
+    /// <summary>增删时绳长/卡片/空夹子的横向补位时长（ms）。</summary>
+    public const int ShiftMs = 450;
+
     public const int MaxNotes = 200;
     public const int MaxTextLength = 2000;
 }

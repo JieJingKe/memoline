@@ -28,7 +28,15 @@ internal sealed class HotZone
 
     private void Poll()
     {
-        if (_window.IsEditing || !Native.GetCursorPos(out var cursor))
+        if (!Native.GetCursorPos(out var cursor))
+        {
+            return;
+        }
+
+        // 编辑中也要更新：否则窗口两侧的透明区会把“点别的应用”那一下吞掉。
+        _window.UpdatePointerPassThrough(cursor);
+
+        if (_window.IsEditing)
         {
             return;
         }

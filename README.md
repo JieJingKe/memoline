@@ -33,7 +33,7 @@ MemoLine 是一个很小的 Windows 桌面工具：它把便签挂在你屏幕�
 ### 特性
 
 - **顶边呼出，自动收起**：鼠标到屏幕上边缘中间，绳子垂下；移开约 0.2 秒自动收起，桌面不留痕。
-- **挂上和摘下都有动效**：新便签从下往上挂到夹子上，删除时向下落出并淡出；夹子始终不动，只有便签在动。
+- **摘下动效**：删除时便签向下落出并淡出，夹子始终不动，只有便签在动；新建便签直接出现在绳尾，不播放挂上动画。增删时整条绳以 450 ms 缓慢展开或收拢，相邻便签是滑过去的，不会瞬移。
 - **四象限分类**：紧急且重要、紧急不重要、重要不紧急、不紧急不重要，对应红、橙、绿、灰四个色点，便签上直接可见。
 - **就地编辑**：双击便签变成输入框，`Ctrl+Enter` 保存，`Esc` 取消；创建时间保留，另记更新时间。
 - **不抢焦点**：呼出、浏览、增删都不改变前台窗口；只有双击编辑时临时取得焦点，保存或取消后立即归还。
@@ -137,7 +137,7 @@ Todos tend to scatter across chat threads, sticky notes and memory. MemoLine kee
 ### Features
 
 - **Drop-down line**: move to the middle of the top edge to reveal it; move away and it retracts after about 0.2 seconds.
-- **Animated hanging and removal**: a new note rises onto its clip; deleting one drops it down and fades it out. The clips never move — only the paper does.
+- **Removal animation**: deleting a note drops it down and fades it out; the clips never move — only the paper does. New notes appear in place without a rise animation. Adding or removing a note opens or closes the row over 450 ms, so neighbouring notes glide instead of jumping.
 - **Four-quadrant categories**: urgent & important, urgent but not important, important but not urgent, and neither — shown as red, orange, green and grey dots on each note.
 - **Edit in place**: double-click a note, press `Ctrl+Enter` to save or `Esc` to cancel. The creation time is preserved and the update time is recorded separately.
 - **No focus stealing**: revealing, browsing and adding/removing notes leave the foreground window alone. Only explicit editing takes focus temporarily and returns it when you save or cancel.

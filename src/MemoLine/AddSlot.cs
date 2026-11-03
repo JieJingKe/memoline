@@ -87,21 +87,24 @@ internal sealed class AddSlot : Grid
 
     public void ShiftTo(double oldLeft, double newLeft, bool animate)
     {
-        var delta = oldLeft - newLeft;
+        var offset = _shift.X;
         _shift.BeginAnimation(TranslateTransform.XProperty, null);
-        if (!animate || Math.Abs(delta) < 0.5 || !SystemParameters.ClientAreaAnimation)
+        var delta = oldLeft + offset - newLeft;
+        if (!animate || Math.Abs(delta) < 0.5)
         {
             _shift.X = 0;
             return;
         }
 
-        _shift.X = delta;
-        _shift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(delta, 0, TimeSpan.FromMilliseconds(200))
+        _shift.X = 0;
+        _shift.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(delta, 0, TimeSpan.FromMilliseconds(Metrics.ShiftMs))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
             FillBehavior = FillBehavior.Stop,
         });
     }
+
+    internal double LayoutOffsetX => _shift.X;
 
     private static SolidColorBrush Freeze(SolidColorBrush brush)
     {

@@ -313,24 +313,40 @@ internal sealed class CardView : Grid
     /// <summary>整卡水平补位：从旧位置滑回新位置，夹子只做水平移动。</summary>
     public void ShiftTo(double oldLeft, double newLeft, bool animate)
     {
-        var delta = oldLeft - newLeft;
+        // 上一段补位没走完时用当前视觉偏移续接，避免卡片先跳回旧位置再重新滑动。
+        var offset = _layoutShift.X;
         _layoutShift.BeginAnimation(TranslateTransform.XProperty, null);
-        if (!animate || Math.Abs(delta) < 0.5 || !SystemParameters.ClientAreaAnimation)
+        var delta = oldLeft + offset - newLeft;
+        // 补位是布局过渡而不是装饰动画：不随系统的“控件动画”开关退化，否则增删会瞬移。
+        if (!animate || Math.Abs(delta) < 0.5)
         {
             _layoutShift.X = 0;
             return;
         }
 
-        _layoutShift.X = delta;
-        var animation = new DoubleAnimation(delta, 0, TimeSpan.FromMilliseconds(200))
+        // 基准值保持 0：动画用 FillBehavior.Stop 收尾，结束时落到 0 而不是 delta。
+        _layoutShift.X = 0;
+        var animation = new DoubleAnimation(delta, 0, TimeSpan.FromMilliseconds(Metrics.ShiftMs))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
             FillBehavior = FillBehavior.Stop,
         };
         _layoutShift.BeginAnimation(TranslateTransform.XProperty, animation);
     }
 
-    /// <summary>新便签从下方 72 DIP 升上来；夹子先在终位淡入，全程不位移。</summary>
+    internal double LayoutOffsetX => _layoutShift.X;
+
+    /// <summary>新便签从空夹子位置滑出时淡入，避免整张卡在目的地一帧内硬冒出来。</summary>
+    public void PlayEnter()
+    {
+        BeginAnimation(OpacityProperty, new DoubleAnimation(0, Opacity, TimeSpan.FromMilliseconds(Metrics.ShiftMs))
+        {
+            EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+            FillBehavior = FillBehavior.Stop,
+        });
+    }
+
+    /// <summary>撤销删除时把便签从下方 72 DIP 挂回绳上；夹子先在终位淡入，全程不位移。</summary>
     public void PlayHang()
     {
         _removing = false;

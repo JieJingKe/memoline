@@ -207,6 +207,17 @@ internal static class Native
         Log.Write($"exstyle click-through hwnd=0x{hwnd.ToInt64():x} before=0x{before:x} after=0x{after:x} transparent={(after & WS_EX_TRANSPARENT) != 0}");
     }
 
+    /// <summary>空白区域让点击穿到下层窗口；只改扩展样式，不触发重绘。</summary>
+    public static void SetClickThrough(IntPtr hwnd, bool on)
+    {
+        var current = (long)GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+        var next = on ? current | WS_EX_TRANSPARENT : current & ~WS_EX_TRANSPARENT;
+        if (next != current)
+        {
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(next));
+        }
+    }
+
     public static string DescribeWindow(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero)

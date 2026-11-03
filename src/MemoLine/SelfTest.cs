@@ -273,6 +273,7 @@ internal static class SelfTest
 
         var window = new LineWindow(store);
         Log.Write($"selftest window cards={window.Cards.Count} notes={store.Count}");
+        Info($"window: OS control-area animation={SystemParameters.ClientAreaAnimation} (reflow ignores it by design)");
         window.Show();
         await Task.Delay(200);
 
@@ -341,20 +342,43 @@ internal static class SelfTest
             Info("window: all cards fit, scroll branch skipped");
         }
 
+        var heightClosed = window.Height;
         window.TogglePreviewForTest(newest);
         await Task.Delay(120);
         Check(window.IsPreviewOpen, "window: single click opens preview");
-        Check(window.Height > Metrics.BaseWindowHeight, "window: preview grows the window", window.Height.ToString("F0"));
+        Check(window.Height > heightClosed + 1, "window: preview grows the window", $"{heightClosed:F0}->{window.Height:F0}");
         window.TogglePreviewForTest(newest);
         await Task.Delay(80);
         Check(!window.IsPreviewOpen, "window: second click closes preview");
-        Check(Math.Abs(window.Height - Metrics.BaseWindowHeight) < 0.5, "window: closing preview restores height");
+        Check(Math.Abs(window.Height - heightClosed) < 0.5, "window: closing preview restores height", window.Height.ToString("F0"));
 
+        // 先把滚轮拨回绳头，否则“滚动一格”正好等于“腾一格”，草稿的起点和终点会重合。
+        window.ScrollForTest(-480);
+        await Task.Delay(60);
+        var frameBeforeCreate = (window.Left, window.Width, window.Height);
         var beforeEditFocus = Native.GetForegroundWindow();
         window.StartNewNote();
-        await Task.Delay(900);
+        await Task.Delay(120);
+        var frameDuringCreate = (window.Left, window.Width, window.Height);
+        var createOffsets = window.Cards.Select(card => Math.Abs(card.LayoutOffsetX)).ToList();
+        createOffsets.Add(Math.Abs(window.AddSlotOffsetX));
+        Check(createOffsets.Max() > 1, "window: create reflow is animated, not snapped", createOffsets.Max().ToString("F1"));
+        Check(
+            Math.Abs(frameDuringCreate.Left - frameBeforeCreate.Left) < 0.5
+            && Math.Abs(frameDuringCreate.Width - frameBeforeCreate.Width) < 0.5
+            && Math.Abs(frameDuringCreate.Height - frameBeforeCreate.Height) < 0.5,
+            "window: create never resizes the hwnd",
+            $"{frameBeforeCreate.Left:F0}x{frameBeforeCreate.Width:F0}x{frameBeforeCreate.Height:F0}→{frameDuringCreate.Left:F0}x{frameDuringCreate.Width:F0}x{frameDuringCreate.Height:F0}");
+        Check(
+            window.DraftCard is { Opacity: < 0.95 } draftFading && Math.Abs(draftFading.LayoutOffsetX) > 1,
+            "window: draft slides out of the clip while fading in",
+            window.DraftCard is { } fading ? $"offset={fading.LayoutOffsetX:F1} opacity={fading.Opacity:F2}" : "no draft");
+
+        await Task.Delay(800);
         Check(window.IsEditing, "window: new note enters edit mode");
         Check(window.DraftCard is not null, "window: draft card exists");
+        Check(window.Cards.All(card => Math.Abs(card.LayoutOffsetX) < 0.5), "window: create reflow settles at zero", window.Cards.Max(card => Math.Abs(card.LayoutOffsetX)).ToString("F1"));
+        Check(Math.Abs(window.AddSlotOffsetX) < 0.5, "window: add slot settles after create", window.AddSlotOffsetX.ToString("F1"));
         var draftId = window.DraftCard?.Note.Id;
         var cardsBeforeRepeat = window.Cards.Count;
         window.StartNewNote();
@@ -403,8 +427,27 @@ internal static class SelfTest
 
         var victim = window.Cards[0];
         var victimId = victim.Note.Id;
+        var frameBeforeDelete = (window.Left, window.Width, window.Height);
         window.DeleteNote(victim);
-        await Task.Delay(700);
+        await Task.Delay(120);
+        Check(
+            Math.Abs(window.Left - frameBeforeDelete.Left) < 0.5
+            && Math.Abs(window.Width - frameBeforeDelete.Width) < 0.5
+            && Math.Abs(window.Height - frameBeforeDelete.Height) < 0.5,
+            "window: delete never resizes the hwnd",
+            $"{window.Left:F0}x{window.Width:F0}x{window.Height:F0}");
+        await Task.Delay(600);
+        Check(
+            Math.Abs(window.Left - frameBeforeDelete.Left) < 0.5
+            && Math.Abs(window.Width - frameBeforeDelete.Width) < 0.5
+            && Math.Abs(window.Height - frameBeforeDelete.Height) < 0.5,
+            "window: delete keeps the hwnd size through the reflow end",
+            $"{window.Left:F0}x{window.Width:F0}x{window.Height:F0}");
+        await Task.Delay(450);
+        Check(window.Cards.All(card => Math.Abs(card.LayoutOffsetX) < 0.5), "window: delete reflow settles at zero", window.Cards.Max(card => Math.Abs(card.LayoutOffsetX)).ToString("F1"));
+        Check(Math.Abs(window.AddSlotOffsetX) < 0.5, "window: add slot settles after delete", window.AddSlotOffsetX.ToString("F1"));
+        var expectedCentre = monitor.rcWork.Left / window.Scale + Zone.WorkWidthDip(monitor, window.Scale) / 2;
+        Check(Math.Abs(window.Left + window.Width / 2 - expectedCentre) < 0.5, "window: reflow keeps the rope centred", $"{window.Left + window.Width / 2:F1}/{expectedCentre:F1}");
         Check(store.Count == seeds.Length, "window: delete removes from store", store.Count.ToString());
         Check(window.Cards.Count == seeds.Length, "window: delete removes the card", window.Cards.Count.ToString());
         Check(window.CanUndo, "window: delete enables undo");
@@ -418,9 +461,10 @@ internal static class SelfTest
 
         window.Retract();
         await Task.Delay(350);
-        var retractedBottom = window.Top + window.Height;
+        // 常驻下落空间可以露出屏幕，绳子本体（BaseWindowHeight 以内）必须完全收起。
+        var retractedContentBottom = window.Top + Metrics.BaseWindowHeight;
         Check(!window.IsOpen, "window: retract closes the line");
-        Check(retractedBottom <= monitor.rcMonitor.Top / window.Scale + 0.5, "window: retracted window is off-screen", $"{retractedBottom:F0}");
+        Check(retractedContentBottom <= monitor.rcMonitor.Top / window.Scale + 0.5, "window: retracted rope is off-screen", $"{retractedContentBottom:F0}");
 
         var anchor = new AnchorLine();
         anchor.PlaceOnPrimaryMonitor(window);
@@ -456,6 +500,70 @@ internal static class SelfTest
         Check(!tips.IsVisible, "tips: second toggle closes");
 
         window.Close();
+
+        // 不满一屏时窗口同样不动尺寸：绳子在固定画布里展开，草稿从空夹子位置滑入。
+        using (var smallStore = new NotesStore(Path.Combine(root, "small.json")))
+        {
+            smallStore.Load();
+            smallStore.Add(Seed("第一条", Quadrant.Neither, -20));
+            smallStore.Add(Seed("第二条", Quadrant.Neither, -10));
+
+            var small = new LineWindow(smallStore);
+            small.Show();
+            await Task.Delay(200);
+            small.Reveal(manual: true);
+            await Task.Delay(500);
+
+            var frameBefore = (small.Left, small.Width, small.Height);
+
+            // 窗口比绳子宽：两侧空白必须让点击穿过去，绳子上则保持可点。
+            var sidePoint = new Native.POINT
+            {
+                X = (int)Math.Round((small.Left + 10) * small.Scale),
+                Y = (int)Math.Round((small.Top + 80) * small.Scale),
+            };
+            small.UpdatePointerPassThrough(sidePoint);
+            var sideStyle = (long)Native.GetWindowLongPtr(small.WindowHandle, Native.GWL_EXSTYLE);
+            Check((sideStyle & Native.WS_EX_TRANSPARENT) != 0, "window: empty side band passes clicks through");
+            var firstCard = small.Cards[0];
+            var ropePoint = new Native.POINT
+            {
+                X = (int)Math.Round((small.Left + Canvas.GetLeft(firstCard) + Metrics.CardWidth / 2) * small.Scale),
+                Y = (int)Math.Round((small.Top + Metrics.LineY + 60) * small.Scale),
+            };
+            small.UpdatePointerPassThrough(ropePoint);
+            var ropeStyle = (long)Native.GetWindowLongPtr(small.WindowHandle, Native.GWL_EXSTYLE);
+            Check((ropeStyle & Native.WS_EX_TRANSPARENT) == 0, "window: pointer over a note restores mouse input");
+
+            small.StartNewNote();
+            await Task.Delay(120);
+            var frameMid = (small.Left, small.Width, small.Height);
+            var addMid = small.AddSlotOffsetX;
+            var draftMid = small.DraftCard is { } mid ? (mid.LayoutOffsetX, mid.Opacity) : (0, 1);
+            await Task.Delay(380);
+            var frameLate = (small.Left, small.Width, small.Height);
+            await Task.Delay(320);
+            var frameAfter = (small.Left, small.Width, small.Height);
+            var addAfter = small.AddSlotOffsetX;
+            Log.Write($"selftest small frame {frameBefore.Left:F0}x{frameBefore.Width:F0} → {frameMid.Width:F0} → {frameLate.Width:F0} → {frameAfter.Width:F0} add {addMid:F0}->{addAfter:F1} draft offset={draftMid.Item1:F1} opacity={draftMid.Item2:F2}");
+
+            Check(
+                Math.Abs(frameMid.Width - frameBefore.Width) < 0.5
+                && Math.Abs(frameMid.Left - frameBefore.Left) < 0.5
+                && Math.Abs(frameLate.Width - frameBefore.Width) < 0.5
+                && Math.Abs(frameAfter.Width - frameBefore.Width) < 0.5
+                && Math.Abs(frameAfter.Left - frameBefore.Left) < 0.5,
+                "window: create inside one row keeps the hwnd fixed",
+                $"{frameBefore.Width:F0}->{frameMid.Width:F0}->{frameLate.Width:F0}->{frameAfter.Width:F0}");
+            Check(Math.Abs(addMid) > 1, "window: create animates the clip inside the fixed frame", addMid.ToString("F1"));
+            Check(Math.Abs(draftMid.Item1) > 1 && draftMid.Item2 < 0.95, "window: draft fades in from the clip", $"offset={draftMid.Item1:F1} opacity={draftMid.Item2:F2}");
+            Check(Math.Abs(addAfter) < 0.5, "window: create content settles at zero", addAfter.ToString("F1"));
+            var smallCentre = small.Left + small.Width / 2;
+            Check(Math.Abs(smallCentre - expectedCentre) < 0.5, "window: fixed frame stays centred", $"{smallCentre:F1}/{expectedCentre:F1}");
+
+            small.Close();
+        }
+
         store.Dispose();
     }
 

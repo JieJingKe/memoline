@@ -23,6 +23,7 @@ internal sealed class LineWindow : Window
     private const int NewHotkeyId = 14;
     private const int UndoHotkeyId = 15;
     private const int ManualGraceMs = 2500;
+    private const double RemoveDropRoom = 100;
 
     private const uint MenuEditId = 401;
     private const uint MenuRemoveId = 402;
@@ -43,7 +44,11 @@ internal sealed class LineWindow : Window
     private bool _open;
     private bool _suppressLogged;
     private bool _layoutReady;
+    private bool _pointerPassThrough;
     private int _removingCount;
+
+    private double _ropeLeft;
+    private double _ropeWidth;
 
     private bool _editing;
     private CardView? _editingCard;
@@ -129,16 +134,23 @@ internal sealed class LineWindow : Window
 
     internal double AddSlotLeft => Canvas.GetLeft(_addSlot);
 
+    internal double AddSlotOffsetX => _addSlot.LayoutOffsetX;
+
     public bool InGrace => Environment.TickCount64 < _ignoreRetractUntil;
 
     public (double LeftDip, double WidthDip) TriggerZoneDip => Zone.Trigger(_monitor, _scale);
 
+    /// <summary>
+    /// 鼠标判定用的是“看得见的绳子”而不是整个 HWND：窗口为防闪动固定成满容量宽度，
+    /// 若按窗口算，指针在绳子两侧的透明区也会把绳子撑住不收。
+    /// </summary>
     public Native.RECT OpenedBoundsPhysical => new()
     {
-        Left = (int)Math.Round(Left * _scale),
+        Left = (int)Math.Round((Left + _ropeLeft) * _scale),
         Top = (int)Math.Round(TargetTop() * _scale),
-        Right = (int)Math.Round((Left + Width) * _scale),
-        Bottom = (int)Math.Round((TargetTop() + Height) * _scale),
+        Right = (int)Math.Round((Left + _ropeLeft + _ropeWidth) * _scale),
+        Bottom = (int)Math.Round((TargetTop() + Metrics.BaseWindowHeight
+            + (_previewPanel is null ? 0 : PreviewGap + _previewHeight)) * _scale),
     };
 
     internal IReadOnlyList<CardView> Cards => _cards;
@@ -150,6 +162,49 @@ internal sealed class LineWindow : Window
     internal void TogglePreviewForTest(CardView card) => TogglePreview(card);
 
     internal void ScrollForTest(int delta) => ScrollBy(delta);
+
+    /// <summary>
+    /// 窗口为了不闪动而固定成满容量宽度，比绳子宽出的透明区必须让点击穿到下层窗口，
+    /// 否则会挡住屏幕顶部一大条区域。由 32ms 轮询调用，只在状态变化时改扩展样式。
+    /// </summary>
+    internal void UpdatePointerPassThrough(Native.POINT cursor)
+    {
+        var passThrough = !IsPointerOverContent(cursor);
+        if (passThrough == _pointerPassThrough)
+        {
+            return;
+        }
+
+        _pointerPassThrough = passThrough;
+        Native.SetClickThrough(_hwnd, passThrough);
+        Log.Write($"hit-test pass-through {passThrough}");
+    }
+
+    private bool IsPointerOverContent(Native.POINT cursor)
+    {
+        if (!_open || _hwnd == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var x = cursor.X / _scale - Left;
+        var y = cursor.Y / _scale - Top;
+        if (_previewPanel is { } panel)
+        {
+            var panelLeft = Canvas.GetLeft(panel);
+            var panelTop = Canvas.GetTop(panel);
+            if (x >= panelLeft && x <= panelLeft + PreviewWidth
+                && y >= panelTop && y <= panelTop + _previewHeight)
+            {
+                return true;
+            }
+        }
+
+        var top = Metrics.LineY - 8;
+        var bottom = Metrics.BaseWindowHeight + (_removingCount > 0 ? RemoveDropRoom : 0);
+        return x >= _ropeLeft - 6 && x <= _ropeLeft + _ropeWidth + 6
+            && y >= top && y <= bottom;
+    }
 
     public event Action<bool>? OpenChanged;
 
@@ -174,8 +229,9 @@ internal sealed class LineWindow : Window
         }
 
         _monitor = MonitorNearestTo(cursor);
-        _open = true;
+        // 先按收起位置重排：上一轮预览留下的高度在这里收掉，改尺寸时窗口还在屏幕外。
         Layout();
+        _open = true;
         Top = HiddenTop();
 
         if (OnboardingState.NeedsTip)
@@ -338,7 +394,6 @@ internal sealed class LineWindow : Window
 
             card.EndEdit();
             card.MarkSaved();
-            card.PlayHang();
             _draftCard = null;
             SortCards();
             Log.Write($"draft saved {note.Id} quadrant={Quadrants.Key(note.Quadrant)} len={note.Text.Length}");
@@ -357,7 +412,7 @@ internal sealed class LineWindow : Window
         _editing = false;
         _editingCard = null;
         FinishEditFocus(restoreFocus);
-        Layout(animate: false);
+        Layout(animate: true);
         ContentChanged?.Invoke();
     }
 
@@ -652,8 +707,17 @@ internal sealed class LineWindow : Window
         WireCard(card);
         _cards.Add(card);
         _draftCard = card;
+
+        // 从空夹子原来的位置起步，跟着整排一起滑到新槽位，而不是在目的地一帧冒出来。
+        var enterX = Canvas.GetLeft(_addSlot);
+        if (!double.IsNaN(enterX))
+        {
+            Canvas.SetLeft(card, enterX);
+        }
+
         _canvas.Children.Add(card);
         Layout(animate: true);
+        card.PlayEnter();
         Log.Write($"draft created {note.Id}, notes={_store.Count}");
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => BeginEdit(card)));
     }
@@ -848,11 +912,9 @@ internal sealed class LineWindow : Window
         {
             Layout(animate: false);
         }
-        else
-        {
-            Height = Metrics.BaseWindowHeight;
-        }
 
+        // relayout:false 时不在这里改高度：调用方要么紧接着 Layout（滚轮/预览切换），
+        // 要么正在收起（先滑出屏幕，下次展开前再收高度），避免在可见状态下 resize。
         Log.Write("preview closed");
     }
 
@@ -866,12 +928,13 @@ internal sealed class LineWindow : Window
         var cardLeft = Canvas.GetLeft(_previewCard);
         if (double.IsNaN(cardLeft))
         {
-            cardLeft = Metrics.SidePadding;
+            cardLeft = _ropeLeft + Metrics.SidePadding;
         }
 
         var x = cardLeft + Metrics.CardWidth / 2 - PreviewWidth / 2;
-        var maxX = Math.Max(Metrics.SidePadding, Width - Metrics.SidePadding - PreviewWidth);
-        x = Math.Clamp(x, Metrics.SidePadding, maxX);
+        var minX = _ropeLeft + Metrics.SidePadding;
+        var maxX = Math.Max(minX, _ropeLeft + _ropeWidth - Metrics.SidePadding - PreviewWidth);
+        x = Math.Clamp(x, minX, maxX);
         Canvas.SetLeft(_previewPanel, x);
         Canvas.SetTop(_previewPanel, Metrics.BaseWindowHeight + PreviewGap);
     }
@@ -938,30 +1001,87 @@ internal sealed class LineWindow : Window
 
         var capacity = CapacityDip();
         var visibleNotes = Math.Max(1, capacity - 1);
-        var slots = _cards.Count + 1;
-        var shown = Math.Min(slots, capacity);
-        var minWidth = Metrics.SidePadding * 2 + shown * Metrics.CardWidth + (shown - 1) * Metrics.Gap;
-        var (left, width) = Zone.Span(_monitor, _scale, minWidth);
+        var shown = Math.Min(_cards.Count + 1, capacity);
+        var smooth = animate && _layoutReady;
 
-        Width = width;
-        Height = _previewPanel is null
-            ? Metrics.BaseWindowHeight
-            : Metrics.BaseWindowHeight + PreviewGap + _previewHeight;
-        Left = left;
+        // 窗口按满容量定死：分层窗口一旦改尺寸就整块重建表面，增删时改宽高都会闪一下。
+        // 绳子的伸缩只发生在画布内部，窗口本身在展开期间不动。
+        var (windowLeft, windowWidth) = Zone.Span(
+            _monitor,
+            _scale,
+            RowWidth(capacity) + Metrics.SidePadding * 2);
+        var (ropeLeft, ropeWidth) = Zone.Span(
+            _monitor,
+            _scale,
+            RowWidth(shown) + Metrics.SidePadding * 2);
+        if (Math.Abs(Left - windowLeft) >= 0.5 || Math.Abs(Width - windowWidth) >= 0.5)
+        {
+            Left = windowLeft;
+            Width = windowWidth;
+        }
+
+        _ropeLeft = ropeLeft - windowLeft;
+        _ropeWidth = ropeWidth;
+
+        // 下落空间常驻，删除时不再改窗口高度。
+        Height = Metrics.BaseWindowHeight + RemoveDropRoom
+            + (_previewPanel is null ? 0 : PreviewGap + _previewHeight);
         VisibleCount = visibleNotes;
 
         var maxScroll = Math.Max(0, _cards.Count - visibleNotes) * Metrics.Step;
         _scroll = Math.Clamp(_scroll, 0, maxScroll);
 
-        _line.Width = Math.Max(0, Width - Metrics.SidePadding * 2 + 16);
-        Canvas.SetLeft(_line, Metrics.SidePadding - 8);
-        Canvas.SetTop(_line, Metrics.LineY - 6);
-
-        PlaceCards(animate);
+        PlaceLine(smooth);
+        PlaceCards(smooth);
         PlacePreview();
 
         Top = _open ? TargetTop() : HiddenTop();
         _layoutReady = true;
+    }
+
+    private static double RowWidth(int slots) =>
+        slots * Metrics.CardWidth + (slots - 1) * Metrics.Gap;
+
+    private void PlaceLine(bool animate)
+    {
+        var targetWidth = Math.Max(0, _ropeWidth - Metrics.SidePadding * 2 + 16);
+        var targetLeft = _ropeLeft + Metrics.SidePadding - 8;
+        var oldWidth = _line.Width;
+        var oldLeft = Canvas.GetLeft(_line);
+        if (double.IsNaN(oldLeft))
+        {
+            oldLeft = targetLeft;
+        }
+
+        _line.BeginAnimation(FrameworkElement.WidthProperty, null);
+        _line.BeginAnimation(Canvas.LeftProperty, null);
+        _line.Width = targetWidth;
+        Canvas.SetLeft(_line, targetLeft);
+        Canvas.SetTop(_line, Metrics.LineY - 6);
+
+        if (!animate)
+        {
+            return;
+        }
+
+        var duration = TimeSpan.FromMilliseconds(Metrics.ShiftMs);
+        if (Math.Abs(oldWidth - targetWidth) >= 0.5)
+        {
+            _line.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(oldWidth, targetWidth, duration)
+            {
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                FillBehavior = FillBehavior.Stop,
+            });
+        }
+
+        if (Math.Abs(oldLeft - targetLeft) >= 0.5)
+        {
+            _line.BeginAnimation(Canvas.LeftProperty, new DoubleAnimation(oldLeft, targetLeft, duration)
+            {
+                EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
+                FillBehavior = FillBehavior.Stop,
+            });
+        }
     }
 
     /// <summary>
@@ -971,11 +1091,9 @@ internal sealed class LineWindow : Window
     private void PlaceCards(bool animate)
     {
         var capacity = CapacityDip();
-        var visibleNotes = Math.Max(1, capacity - 1);
         var slots = _cards.Count + 1;
         var shown = Math.Min(slots, capacity);
-        var rowWidth = shown * Metrics.CardWidth + (shown - 1) * Metrics.Gap;
-        var startX = (Width - rowWidth) / 2;
+        var startX = _ropeLeft + (_ropeWidth - RowWidth(shown)) / 2;
         var overflowing = slots > capacity;
         var addX = startX;
 
@@ -999,30 +1117,32 @@ internal sealed class LineWindow : Window
         }
 
         var oldAddLeft = Canvas.GetLeft(_addSlot);
-        if (double.IsNaN(oldAddLeft))
+        var addHadOld = !double.IsNaN(oldAddLeft);
+        if (!addHadOld)
         {
             oldAddLeft = addX;
         }
 
         Canvas.SetLeft(_addSlot, addX);
         Canvas.SetTop(_addSlot, Metrics.LineY);
-        _addSlot.ShiftTo(oldAddLeft, addX, animate && _layoutReady);
+        _addSlot.ShiftTo(addHadOld ? oldAddLeft : addX, addX, animate);
     }
 
     private void PlaceCard(CardView card, double x, bool animate)
     {
         var oldLeft = Canvas.GetLeft(card);
-        if (double.IsNaN(oldLeft))
+        var hadOld = !double.IsNaN(oldLeft);
+        if (!hadOld)
         {
             oldLeft = x;
         }
 
         Canvas.SetLeft(card, x);
         Canvas.SetTop(card, Metrics.LineY);
-        card.ShiftTo(oldLeft, x, animate && _layoutReady);
+        card.ShiftTo(hadOld ? oldLeft : x, x, animate);
 
-        var centre = x + Metrics.CardWidth / 2;
-        var opacity = Math.Clamp(Math.Min(centre, Width - centre) / EdgeFade, 0, 1);
+        var centre = x - _ropeLeft + Metrics.CardWidth / 2;
+        var opacity = Math.Clamp(Math.Min(centre, _ropeWidth - centre) / EdgeFade, 0, 1);
         card.Opacity = opacity;
         card.IsHitTestVisible = opacity > 0.5 && !card.IsRemoving;
     }
@@ -1056,7 +1176,9 @@ internal sealed class LineWindow : Window
 
     private double TargetTop() => _monitor.rcMonitor.Top / _scale;
 
-    private double HiddenTop() => TargetTop() - Height - 1;
+    // 只把绳子本身挪出屏幕，不按整个窗口高度算：常驻的下落空间是空的，
+    // 按它算会让弹性展开多走 100 DIP、节奏变快，失去 v1.0 的手感。
+    private double HiddenTop() => TargetTop() - Metrics.BaseWindowHeight - 1;
 
     private void ParkOffscreen()
     {
