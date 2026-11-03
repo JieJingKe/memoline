@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#57432D"/>
+      <stop offset="1" stop-color="#2A1F14"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#FDF8EA"/>
+      <stop offset="1" stop-color="#E9D4A9"/>
+    </linearGradient>
+    <clipPath id="badgeClip">
+      <rect x="2.5" y="2.5" width="59" height="59" rx="13.5"/>
+    </clipPath>
+  </defs>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="13.5" fill="url(#bg)"/>
+  <!-- rope -->
+  <g clip-path="url(#badgeClip)">
+    <path d="M-1 16 C 16 21, 48 21, 65 16" fill="none" stroke="#FFFFFF" stroke-width="5.6" stroke-linecap="round"/>
+  </g>
+  <!-- note -->
+  <rect x="8.5" y="26" width="47" height="30" rx="3" fill="url(#paper)" stroke="#C7A87C" stroke-width="1"/>
+  <g stroke="#4A3720" stroke-linecap="round" opacity="0.62">
+    <path d="M14.5 36.5 H49.5" stroke-width="3.2"/>
+    <path d="M14.5 43.5 H43.5" stroke-width="3.2"/>
+    <path d="M14.5 50.5 H33.5" stroke-width="3.2"/>
+  </g>
+  <circle cx="49" cy="32.5" r="4.6" fill="#D64545"/>
+  <!-- pin -->
+  <g stroke="#5E6A75" stroke-width="1.6" stroke-linejoin="round">
+    <path d="M28.2 10 q2.8 0 3 2.7 l.7 5.3 -1.1 2.6 .8 14 q.1 2.2 -2.4 2.2 h-1.2 q-2.2 0 -2.2 -2.2 l-.4 -9.6 z" fill="#E4EAF0"/>
+    <path d="M35.8 10 q-2.8 0 -3 2.7 l-.7 5.3 1.1 2.6 -.8 14 q-.1 2.2 2.4 2.2 h1.2 q2.2 0 2.2 -2.2 l.4 -9.6 z" fill="#E4EAF0"/>
+    <rect x="24.5" y="18.2" width="15" height="4.4" rx="2.2" fill="#EDF2F6"/>
+    <circle cx="32" cy="20.4" r="3.1" fill="#B9C3CD"/>
+  </g>
+</svg>

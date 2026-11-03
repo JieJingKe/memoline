@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#57432D"/>
+      <stop offset="0.55" stop-color="#3B2D1E"/>
+      <stop offset="1" stop-color="#261C12"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0.05" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#FDF8EA"/>
+      <stop offset="0.55" stop-color="#F5E8C8"/>
+      <stop offset="1" stop-color="#E7D1A5"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.16" stop-color="#F0F4F7"/>
+      <stop offset="0.45" stop-color="#CCD5DD"/>
+      <stop offset="0.74" stop-color="#AAB6C1"/>
+      <stop offset="1" stop-color="#EDF1F4"/>
+    </linearGradient>
+    <linearGradient id="rope" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.5" stop-color="#F5F2EB"/>
+      <stop offset="1" stop-color="#D7DCE2"/>
+    </linearGradient>
+    <filter id="noteShadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="7" stdDeviation="6" flood-color="#120C06" flood-opacity="0.45"/>
+    </filter>
+    <filter id="clipShadow" x="-40%" y="-30%" width="180%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#120C06" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="badgeClip">
+      <rect x="10" y="10" width="236" height="236" rx="54"/>
+    </clipPath>
+  </defs>
+
+  <rect x="10" y="10" width="236" height="236" rx="54" fill="url(#bg)"/>
+  <rect x="11" y="11" width="234" height="234" rx="53" fill="none" stroke="#6E5738" stroke-opacity="0.5" stroke-width="2"/>
+
+  <!-- rope -->
+  <g clip-path="url(#badgeClip)">
+    <path d="M2 58 C 62 73, 194 73, 254 58" fill="none" stroke="#1A130C" stroke-opacity="0.4" stroke-width="12" stroke-linecap="round" transform="translate(0 3)"/>
+    <path d="M2 58 C 62 73, 194 73, 254 58" fill="none" stroke="url(#rope)" stroke-width="9" stroke-linecap="round"/>
+  </g>
+
+  <!-- kraft note -->
+  <g transform="rotate(-3 128 170)" filter="url(#noteShadow)">
+    <rect x="40" y="108" width="176" height="124" rx="12" fill="url(#paper)"/>
+    <rect x="40.75" y="108.75" width="174.5" height="122.5" rx="11.25" fill="none" stroke="#C7A87C" stroke-width="1.5"/>
+    <path d="M40 120 a12 12 0 0 1 12-12 h152 a12 12 0 0 1 12 12 v1 h-176 z" fill="#FFFDF6" opacity="0.4"/>
+    <g stroke="#4A3720" stroke-width="7" stroke-linecap="round" opacity="0.62">
+      <path d="M62 148 H192"/>
+      <path d="M62 169 H174"/>
+      <path d="M62 190 H140"/>
+      <path d="M62 211 H116"/>
+    </g>
+    <circle cx="192" cy="136" r="9" fill="#D64545"/>
+    <circle cx="192" cy="136" r="9" fill="none" stroke="#8E2B2B" stroke-width="1.5" opacity="0.8"/>
+  </g>
+
+  <!-- clothespin -->
+  <g filter="url(#clipShadow)">
+    <!-- back leg (behind front leg) -->
+    <path d="M134 44 q9 0 9 9 l1 22 -3 8 2 52 q0 7 -8 7 h-5 q-7 0 -7 -7 l-1 -36 z"
+          fill="url(#steel)" stroke="#717D88" stroke-width="2.2" stroke-linejoin="round"/>
+    <!-- front leg -->
+    <path d="M122 44 q-9 0 -9 9 l-1 22 3 8 -2 52 q0 7 8 7 h5 q7 0 7 -7 l1 -36 z"
+          fill="url(#steel)" stroke="#717D88" stroke-width="2.2" stroke-linejoin="round"/>
+    <!-- spring band -->
+    <rect x="103" y="72" width="50" height="13" rx="6.5" fill="#D7DEE5" stroke="#66727D" stroke-width="2.2"/>
+    <circle cx="128" cy="78.5" r="10" fill="#C3CCD6" stroke="#5B6771" stroke-width="2.6"/>
+    <circle cx="128" cy="78.5" r="3.4" fill="#59636D"/>
+    <circle cx="128" cy="78.5" r="7.2" fill="none" stroke="#F4F8FA" stroke-width="1.4" opacity="0.7"/>
+  </g>
+</svg>

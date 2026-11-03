@@ -133,6 +133,9 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern bool DestroyIcon(IntPtr hIcon);
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern uint ExtractIconEx(string szFileName, int nIconIndex, IntPtr[] phiconLarge, IntPtr[] phiconSmall, uint nIcons);
+
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int nIndex);
 

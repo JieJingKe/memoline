@@ -1,5 +1,7 @@
 <div align="center">
 
+<p><img src="docs/images/memoline-logo.png" width="120" height="120" alt="MemoLine logo"></p>
+
 <h1>MemoLine · 备忘录晾衣绳</h1>
 
 <p><strong>Notes, hung on a line.</strong></p>

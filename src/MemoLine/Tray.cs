@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 
@@ -28,7 +29,12 @@ internal sealed class TrayIcon : IDisposable
     {
         _hwnd = hwnd;
         var size = Math.Clamp(Native.GetSystemMetrics(Native.SM_CXSMICON), 16, 64);
-        _hicon = BuildIcon(size);
+        _hicon = LoadExeIcon(size);
+        if (_hicon == IntPtr.Zero)
+        {
+            _hicon = BuildIcon(size);
+        }
+
         _source = HwndSource.FromHwnd(hwnd);
         _source?.AddHook(WndProc);
         Add(Lang.T("tray.tip.idle"));
@@ -184,6 +190,32 @@ internal sealed class TrayIcon : IDisposable
                 QuitRequested?.Invoke();
                 break;
         }
+    }
+
+    /// <summary>优先复用 exe 内嵌图标；经 dotnet 宿主启动时取不到，回退到手绘。</summary>
+    private static IntPtr LoadExeIcon(int size)
+    {
+        var path = Environment.ProcessPath;
+        if (path is null || !string.Equals(Path.GetFileNameWithoutExtension(path), "MemoLine", StringComparison.OrdinalIgnoreCase))
+        {
+            return IntPtr.Zero;
+        }
+
+        var large = new IntPtr[1];
+        var small = new IntPtr[1];
+        var count = Native.ExtractIconEx(path, 0, large, small, 1);
+        if (large[0] != IntPtr.Zero)
+        {
+            Native.DestroyIcon(large[0]);
+        }
+
+        if (count == 0 || small[0] == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        Log.Write($"G6 tray icon from exe size={size}x{size}");
+        return small[0];
     }
 
     /// <summary>白绳 + 银夹 + 牛皮纸便签 + 一颗红点，32 位 BGRA 直接喂 CreateIcon。</summary>
