@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+.idea/
+
+# 运行期日志（数据在 %LOCALAPPDATA%\MemoLine，不落仓库）
+*.log
+
+# 统一构建产物目录
+dist/
+
+# OS
+Thumbs.db
+.DS_Store
