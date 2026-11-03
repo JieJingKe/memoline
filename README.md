@@ -61,7 +61,7 @@ MemoLine 是一个很小的 Windows 桌面工具：它把便签挂在你屏幕�
 
 ### 安装
 
-1. 下载或构建 `MemoLine.exe`；如果仓库暂时没有 Release，请按下方“从源码构建”生成。
+1. 从 [Releases](https://github.com/JieJingKe/memoline/releases/latest) 下载 `MemoLine.exe`；也可以按下方“从源码构建”自行生成。
 2. 双击运行，不需要安装，也不需要单独安装 .NET 运行时（发布版为自包含单文件）。
 3. 从托盘菜单退出。
 
@@ -165,7 +165,7 @@ Right-clicking a note also offers Edit and Take it down. The tray menu exposes e
 
 ### Install
 
-1. Download or build `MemoLine.exe`; if no release is available yet, build it from source below.
+1. Download `MemoLine.exe` from [Releases](https://github.com/JieJingKe/memoline/releases/latest), or build it from source below.
 2. Double-click to run. No installation and no separate .NET runtime are required for the self-contained release.
 3. Quit from the tray menu.
 
